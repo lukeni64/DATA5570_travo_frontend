@@ -12,8 +12,11 @@ export default function CreatePostScreen() {
   const [state, setState] = useState<string>();
   const [city, setCity] = useState<string>();
   const [description, setDescription] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [pros, setPros] = useState<string[]>([]);
   const [cons, setCons] = useState<string[]>([]);
+  const [rating, setRating] = useState<number | undefined>();
   const [price, setPrice] = useState('');
 
   const cityOptions = useMemo(() => (state ? usStateCities[state] : []), [state]);
@@ -24,8 +27,11 @@ export default function CreatePostScreen() {
       state,
       city,
       description,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
       pros,
       cons,
+      rating,
       price: price ? Number(price) : undefined,
     };
     console.log('Create post payload:', payload);
@@ -65,8 +71,27 @@ export default function CreatePostScreen() {
         numberOfLines={4}
         style={styles.multiline}
       />
+      <InputField
+        label="Trip Start Date"
+        value={startDate}
+        onChangeText={setStartDate}
+        placeholder="YYYY-MM-DD"
+      />
+      <InputField
+        label="Trip End Date"
+        value={endDate}
+        onChangeText={setEndDate}
+        placeholder="YYYY-MM-DD"
+      />
       <BulletListInput label="Pros" items={pros} onChange={setPros} />
       <BulletListInput label="Cons" items={cons} onChange={setCons} />
+      <DropdownSelector
+        label="Rating"
+        value={rating ? `${rating} / 5` : undefined}
+        options={['1', '2', '3', '4', '5']}
+        placeholder="Select rating"
+        onSelect={(value) => setRating(Number(value))}
+      />
       <InputField
         label="Price (optional)"
         value={price}

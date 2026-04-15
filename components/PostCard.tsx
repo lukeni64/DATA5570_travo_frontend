@@ -9,6 +9,9 @@ type PostCardProps = {
 };
 
 export function PostCard({ post, onPressAuthor }: PostCardProps) {
+  const filledStars = post.rating ? '★'.repeat(post.rating) : '';
+  const emptyStars = post.rating ? '☆'.repeat(5 - post.rating) : '';
+
   return (
     <View style={styles.card}>
       <Pressable style={styles.authorRow} onPress={() => onPressAuthor?.(post)}>
@@ -18,6 +21,17 @@ export function PostCard({ post, onPressAuthor }: PostCardProps) {
       <Image source={{ uri: post.image }} style={styles.image} />
       <View style={styles.content}>
         <Text style={styles.location}>{post.city}, {post.state}</Text>
+        {post.rating ? (
+          <Text style={styles.rating}>
+            Rating: {filledStars}
+            {emptyStars} ({post.rating}/5)
+          </Text>
+        ) : null}
+        {post.startDate || post.endDate ? (
+          <Text style={styles.tripDates}>
+            Trip Dates: {post.startDate ?? 'N/A'} - {post.endDate ?? 'N/A'}
+          </Text>
+        ) : null}
         <Text style={styles.description}>{post.description}</Text>
         <Text style={styles.meta}>Pros: {post.pros.join(' • ')}</Text>
         <Text style={styles.meta}>Cons: {post.cons.join(' • ')}</Text>
@@ -64,6 +78,16 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 16,
     fontWeight: '700',
+  },
+  rating: {
+    color: colors.accentBlue,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  tripDates: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
   },
   description: {
     color: colors.textPrimary,

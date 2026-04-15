@@ -6,8 +6,11 @@ export type TravelPost = {
   city: string;
   state: string;
   description: string;
+  startDate?: string;
+  endDate?: string;
   pros: string[];
   cons: string[];
+  rating?: number;
   price?: number;
   createdAt: string;
 };
