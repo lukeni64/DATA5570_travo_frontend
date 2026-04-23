@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
@@ -27,6 +28,16 @@ export function DropdownSelector({
   onSelect,
 }: DropdownSelectorProps) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const filtered = query.trim()
+    ? options.filter((o) => o.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  const handleClose = () => {
+    setOpen(false);
+    setQuery('');
+  };
 
   return (
     <View style={styles.container}>
@@ -39,23 +50,49 @@ export function DropdownSelector({
       </Pressable>
 
       <Modal visible={open} animationType="slide" transparent>
-        <Pressable style={styles.overlay} onPress={() => setOpen(false)}>
-          <Pressable style={styles.modalCard}>
+        <Pressable style={styles.overlay} onPress={handleClose}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
             <Text style={styles.modalTitle}>{label}</Text>
-            <FlatList
-              data={options}
-              keyExtractor={(item) => item}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={styles.option}
-                  onPress={() => {
-                    onSelect(item);
-                    setOpen(false);
-                  }}>
-                  <Text style={styles.optionText}>{item}</Text>
+
+            <View style={styles.searchRow}>
+              <Ionicons name="search" size={16} color={colors.accentBlue} style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder={`Search ${label.toLowerCase()}…`}
+                placeholderTextColor="#6f7f9d"
+                value={query}
+                onChangeText={setQuery}
+                autoCorrect={false}
+                autoCapitalize="words"
+              />
+              {query.length > 0 && (
+                <Pressable onPress={() => setQuery('')}>
+                  <Ionicons name="close-circle" size={16} color="#6f7f9d" />
                 </Pressable>
               )}
-            />
+            </View>
+
+            {filtered.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>No results for "{query}"</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filtered}
+                keyExtractor={(item) => item}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item }) => (
+                  <Pressable
+                    style={styles.option}
+                    onPress={() => {
+                      onSelect(item);
+                      handleClose();
+                    }}>
+                    <Text style={styles.optionText}>{item}</Text>
+                  </Pressable>
+                )}
+              />
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -95,7 +132,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalCard: {
-    maxHeight: '60%',
+    maxHeight: '70%',
     backgroundColor: colors.background,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
@@ -105,7 +142,26 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 16,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: 10,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+  },
+  searchIcon: {
+    marginRight: 6,
+  },
+  searchInput: {
+    flex: 1,
+    height: 38,
+    color: colors.textPrimary,
+    fontSize: 14,
   },
   option: {
     paddingVertical: 12,
@@ -114,5 +170,13 @@ const styles = StyleSheet.create({
   },
   optionText: {
     color: colors.textPrimary,
+  },
+  emptyState: {
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: '#6f7f9d',
+    fontSize: 14,
   },
 });

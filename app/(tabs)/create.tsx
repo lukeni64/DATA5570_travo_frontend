@@ -1,27 +1,54 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { BulletListInput } from '@/components/BulletListInput';
 import { DropdownSelector } from '@/components/DropdownSelector';
 import { InputField } from '@/components/InputField';
 import { colors } from '@/constants/theme';
-import { usStateCities, usStates } from '@/data/usLocations';
-import { createReview } from '@/services/travoApi';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { fetchCities, resetSubmit, submitReview } from '@/store/reviewsSlice';
 
 export default function CreatePostScreen() {
+  const dispatch = useAppDispatch();
+
+  const cities = useAppSelector((s) => s.reviews.cities);
+  const fetchCitiesStatus = useAppSelector((s) => s.reviews.fetchCitiesStatus);
+  const submitStatus = useAppSelector((s) => s.reviews.submitStatus);
+  const submitting = submitStatus === 'loading';
+
+  const [selectedState, setSelectedState] = useState<string>();
+  const [selectedCity, setSelectedCity] = useState<string>();
   const [image, setImage] = useState('');
-  const [state, setState] = useState<string>();
-  const [city, setCity] = useState<string>();
   const [description, setDescription] = useState('');
   const [pros, setPros] = useState<string[]>([]);
   const [cons, setCons] = useState<string[]>([]);
   const [price, setPrice] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
-  const cityOptions = useMemo(() => (state ? usStateCities[state] : []), [state]);
+  // Fetch cities from backend on first open (skip if already loaded)
+  useEffect(() => {
+    if (fetchCitiesStatus === 'idle') {
+      void dispatch(fetchCities());
+    }
+  }, [dispatch, fetchCitiesStatus]);
+
+  // Derive sorted unique state list from backend data
+  const stateOptions = useMemo(
+    () => [...new Set(cities.map((c) => c.state))].sort(),
+    [cities],
+  );
+
+  // Derive city list for the selected state
+  const cityOptions = useMemo(
+    () =>
+      cities
+        .filter((c) => c.state === selectedState)
+        .map((c) => c.city)
+        .sort(),
+    [cities, selectedState],
+  );
 
   const onSubmit = async () => {
-    if (!state || !city) {
+    if (!selectedState || !selectedCity) {
       Alert.alert('Missing location', 'Please select a state and city.');
       return;
     }
@@ -30,31 +57,36 @@ export default function CreatePostScreen() {
       return;
     }
 
-    try {
-      setSubmitting(true);
-      await createReview({
+    const result = await dispatch(
+      submitReview({
         username: 'traveler.jules',
-        city_name: city,
-        state_name: state,
+        city_name: selectedCity,
+        state_name: selectedState,
         rating: 5,
         description,
         pros,
         cons,
-      });
-      Alert.alert('Posted', 'Your post was submitted to the API.');
+      }),
+    );
+
+    if (submitReview.fulfilled.match(result)) {
+      Alert.alert('Posted', 'Your post was submitted.');
       setImage('');
-      setState(undefined);
-      setCity(undefined);
+      setSelectedState(undefined);
+      setSelectedCity(undefined);
       setDescription('');
       setPros([]);
       setCons([]);
       setPrice('');
-    } catch (e) {
-      Alert.alert('Submit failed', e instanceof Error ? e.message : String(e));
-    } finally {
-      setSubmitting(false);
+      dispatch(resetSubmit());
+    } else {
+      const msg = result.error.message ?? 'Something went wrong. Please try again.';
+      Alert.alert('Submit failed', msg);
+      dispatch(resetSubmit());
     }
   };
+
+  const citiesLoading = fetchCitiesStatus === 'loading' || fetchCitiesStatus === 'idle';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -64,23 +96,32 @@ export default function CreatePostScreen() {
         onChangeText={setImage}
         placeholder="https://example.com/trip-image.jpg"
       />
+
       <DropdownSelector
         label="State"
-        value={state}
-        options={usStates}
-        placeholder="Select state"
+        value={selectedState}
+        options={stateOptions}
+        placeholder={citiesLoading ? 'Loading states…' : 'Select state'}
         onSelect={(value) => {
-          setState(value);
-          setCity(undefined);
+          setSelectedState(value);
+          setSelectedCity(undefined);
         }}
       />
+
       <DropdownSelector
         label="City"
-        value={city}
+        value={selectedCity}
         options={cityOptions}
-        placeholder={state ? 'Select city' : 'Select state first'}
-        onSelect={setCity}
+        placeholder={
+          citiesLoading
+            ? 'Loading cities…'
+            : selectedState
+            ? 'Select city'
+            : 'Select state first'
+        }
+        onSelect={setSelectedCity}
       />
+
       <InputField
         label="Description"
         value={description}
@@ -102,7 +143,7 @@ export default function CreatePostScreen() {
 
       <Pressable
         style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-        onPress={onSubmit}
+        onPress={() => void onSubmit()}
         disabled={submitting}>
         <Text style={styles.submitButtonText}>
           {submitting ? 'Submitting…' : 'Submit Post'}

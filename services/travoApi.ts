@@ -3,7 +3,7 @@ import { getApiBaseUrl } from '@/constants/api';
 export type ApiCity = {
   id: number;
   city: string;
-  state_name: string;
+  state: string;
   lat: string;
   lng: string;
 };
@@ -141,7 +141,7 @@ export async function listReviews(username?: string): Promise<ApiReview[]> {
   return res.json() as Promise<ApiReview[]>;
 }
 
-export async function createReview(input: CreateReviewInput): Promise<unknown> {
+export async function createReview(input: CreateReviewInput): Promise<ApiReview> {
   const base = getApiBaseUrl();
   const payload = {
     username: input.username,
@@ -166,5 +166,5 @@ export async function createReview(input: CreateReviewInput): Promise<unknown> {
     );
   }
 
-  return res.json();
+  return res.json() as Promise<ApiReview>;
 }
