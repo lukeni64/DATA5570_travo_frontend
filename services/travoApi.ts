@@ -21,7 +21,9 @@ export type ApiDimUser = {
 export type ApiRelationship = {
   id: number;
   requester: number;
+  requester_username: string;
   addressee: number;
+  addressee_username: string;
   status: 'pending' | 'accepted' | 'rejected' | 'blocked';
   date_sent: string;
 };
@@ -29,9 +31,12 @@ export type ApiRelationship = {
 export type ApiReview = {
   id: number;
   user: number;
+  username: string;
   rating: number;
   description: string;
   city: number;
+  city_name: string;
+  state_name: string;
   created_at: string;
   pros: string;
   cons: string;
@@ -91,12 +96,13 @@ export async function listRelationships(username?: string): Promise<ApiRelations
 export async function sendFriendRequest(input: {
   requester_username: string;
   addressee_username: string;
+  status?: ApiRelationship['status'];
 }): Promise<ApiRelationship> {
   const base = getApiBaseUrl();
   const res = await fetch(`${base}/relationships/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ status: 'accepted', ...input }),
   });
   if (!res.ok) {
     const text = await res.text();

@@ -3,8 +3,8 @@ import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Tex
 
 import { InputField } from '@/components/InputField';
 import { colors } from '@/constants/theme';
-import { listRelationships, listUsers, sendFriendRequest, updateRelationshipStatus } from '@/services/travoApi';
-import { Friend, FriendRequest } from '@/types/models';
+import { listRelationships, listUsers, sendFriendRequest } from '@/services/travoApi';
+import { Friend } from '@/types/models';
 
 const CURRENT_USERNAME = 'traveler.jules';
 
@@ -17,7 +17,6 @@ export default function FriendsScreen() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [friends, setFriends] = useState<Friend[]>([]);
-  const [pending, setPending] = useState<FriendRequest[]>([]);
   const [suggestions, setSuggestions] = useState<Friend[]>([]);
 
   const refresh = async () => {
@@ -29,12 +28,8 @@ export default function FriendsScreen() {
       ]);
 
       const userById = new Map(users.map((u) => [u.user_key, u.username]));
-      const idByUsername = new Map(users.map((u) => [u.username, u.user_key]));
-      const myId = idByUsername.get(CURRENT_USERNAME);
-
       const acceptedOtherUsernames = new Set<string>();
-      const pendingIncoming = new Set<string>();
-      const pendingOutgoing = new Set<string>();
+      const connectedUsernames = new Set<string>();
 
       for (const rel of relationships) {
         const requester = userById.get(rel.requester);
@@ -46,9 +41,8 @@ export default function FriendsScreen() {
         if (!iAmRequester && !iAmAddressee) continue;
 
         const other = iAmRequester ? addressee : requester;
+        connectedUsernames.add(other);
         if (rel.status === 'accepted') acceptedOtherUsernames.add(other);
-        if (rel.status === 'pending' && iAmAddressee) pendingIncoming.add(requester);
-        if (rel.status === 'pending' && iAmRequester) pendingOutgoing.add(addressee);
       }
 
       const nextFriends: Friend[] = [...acceptedOtherUsernames].map((username, idx) => ({
@@ -57,18 +51,7 @@ export default function FriendsScreen() {
         image: avatarFor(username),
       }));
 
-      const nextPending: FriendRequest[] = [...pendingIncoming].map((username, idx) => ({
-        id: idx + 1000,
-        username,
-        image: avatarFor(username),
-      }));
-
-      const excluded = new Set<string>([
-        CURRENT_USERNAME,
-        ...acceptedOtherUsernames,
-        ...pendingIncoming,
-        ...pendingOutgoing,
-      ]);
+      const excluded = new Set<string>([CURRENT_USERNAME, ...connectedUsernames]);
 
       const nextSuggestions: Friend[] = users
         .map((u) => u.username)
@@ -80,15 +63,7 @@ export default function FriendsScreen() {
           image: avatarFor(username),
         }));
 
-      if (!myId) {
-        Alert.alert(
-          'User missing',
-          `No backend user found for ${CURRENT_USERNAME}. Create a post first (it auto-creates the user), then refresh.`,
-        );
-      }
-
       setFriends(nextFriends);
-      setPending(nextPending);
       setSuggestions(nextSuggestions);
     } catch (e) {
       Alert.alert('Failed to load friends', e instanceof Error ? e.message : String(e));
@@ -106,40 +81,19 @@ export default function FriendsScreen() {
     [search, suggestions],
   );
 
-  const onSendRequest = async (username: string) => {
+  const onAddFriend = async (username: string) => {
     try {
       setSubmitting(username);
       await sendFriendRequest({
         requester_username: CURRENT_USERNAME,
         addressee_username: username,
       });
-      await refresh();
+      // Optimistically move user from suggestions to friends list
+      const newFriend: Friend = { id: Date.now(), username, image: avatarFor(username) };
+      setFriends((prev) => [...prev, newFriend]);
+      setSuggestions((prev) => prev.filter((s) => s.username !== username));
     } catch (e) {
-      Alert.alert('Request failed', e instanceof Error ? e.message : String(e));
-    } finally {
-      setSubmitting(null);
-    }
-  };
-
-  const onRespondToRequest = async (requesterUsername: string, status: 'accepted' | 'rejected') => {
-    try {
-      setSubmitting(requesterUsername);
-      const relationships = await listRelationships(CURRENT_USERNAME);
-      const users = await listUsers();
-      const idByUsername = new Map(users.map((u) => [u.username, u.user_key]));
-      const requesterId = idByUsername.get(requesterUsername);
-      const myId = idByUsername.get(CURRENT_USERNAME);
-      if (!requesterId || !myId) throw new Error('Could not resolve user ids.');
-
-      const rel = relationships.find(
-        (r) => r.status === 'pending' && r.requester === requesterId && r.addressee === myId,
-      );
-      if (!rel) throw new Error('Pending request not found.');
-
-      await updateRelationshipStatus({ id: rel.id, status });
-      await refresh();
-    } catch (e) {
-      Alert.alert('Update failed', e instanceof Error ? e.message : String(e));
+      Alert.alert('Failed to add friend', e instanceof Error ? e.message : String(e));
     } finally {
       setSubmitting(null);
     }
@@ -156,31 +110,9 @@ export default function FriendsScreen() {
         </View>
       ) : null}
 
-      <Text style={styles.sectionTitle}>Pending Friend Requests</Text>
-      {pending.map((request) => (
-        <View key={request.id} style={styles.requestRow}>
-          <Image source={{ uri: request.image }} style={styles.avatar} />
-          <Text style={styles.username}>{request.username}</Text>
-          <View style={styles.actions}>
-            <Pressable
-              style={styles.acceptButton}
-              disabled={submitting === request.username}
-              onPress={() => void onRespondToRequest(request.username, 'accepted')}>
-              <Text style={styles.buttonText}>Accept</Text>
-            </Pressable>
-            <Pressable
-              style={styles.rejectButton}
-              disabled={submitting === request.username}
-              onPress={() => void onRespondToRequest(request.username, 'rejected')}>
-              <Text style={styles.buttonText}>Reject</Text>
-            </Pressable>
-          </View>
-        </View>
-      ))}
-
       <View style={styles.columns}>
         <View style={styles.leftColumn}>
-          <Text style={styles.sectionTitle}>Current Friends</Text>
+          <Text style={styles.sectionTitle}>Friends</Text>
           {friends.map((friend) => (
             <View key={friend.id} style={styles.cardRow}>
               <Image source={{ uri: friend.image }} style={styles.avatar} />
@@ -189,6 +121,9 @@ export default function FriendsScreen() {
               </View>
             </View>
           ))}
+          {!loading && friends.length === 0 && (
+            <Text style={styles.emptyText}>No friends yet. Add some!</Text>
+          )}
         </View>
 
         <View style={styles.rightColumn}>
@@ -201,9 +136,9 @@ export default function FriendsScreen() {
                 <Pressable
                   style={styles.addButton}
                   disabled={submitting === profile.username}
-                  onPress={() => void onSendRequest(profile.username)}>
+                  onPress={() => void onAddFriend(profile.username)}>
                   <Text style={styles.buttonText}>
-                    {submitting === profile.username ? 'Sending…' : 'Send Request'}
+                    {submitting === profile.username ? 'Adding…' : 'Add Friend'}
                   </Text>
                 </Pressable>
               </View>
@@ -225,19 +160,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   loadingText: { color: colors.textPrimary },
+  emptyText: { color: colors.textPrimary, opacity: 0.5, fontSize: 13 },
   sectionTitle: {
     color: colors.textPrimary,
     fontWeight: '700',
     marginBottom: 8,
     marginTop: 4,
-  },
-  requestRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    backgroundColor: colors.white,
-    borderRadius: 10,
-    padding: 10,
   },
   columns: {
     flexDirection: 'row',
@@ -256,25 +184,12 @@ const styles = StyleSheet.create({
   avatar: { width: 40, height: 40, borderRadius: 20 },
   rowBody: { marginLeft: 8, flex: 1, justifyContent: 'space-between' },
   username: { color: colors.textPrimary, fontWeight: '600' },
-  actions: { flexDirection: 'row', gap: 8, marginLeft: 'auto' },
   addButton: {
     marginTop: 6,
     backgroundColor: colors.accentBlue,
     paddingVertical: 6,
     borderRadius: 8,
     alignItems: 'center',
-  },
-  acceptButton: {
-    backgroundColor: colors.accentBlue,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-  },
-  rejectButton: {
-    backgroundColor: colors.accentClay,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
   },
   buttonText: { color: colors.white, fontSize: 12, fontWeight: '600' },
 });
